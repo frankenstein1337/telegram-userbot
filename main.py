@@ -1,63 +1,64 @@
-import asyncio
-from datetime import datetime
-import pytz
+import threading
+from flask import Flask
 from telethon import TelegramClient, events
+import pytz
+import datetime
+import asyncio
 
-# 🔐 Данные
-API_ID = 21018756
-API_HASH = '5fce0349ea49d2c1717d197f8536d1b5'
-SESSION_NAME = 'countdown_session'
-PHONE_NUMBER = '+88805727142'
+# Flask-сервер для предотвращения сна Replit
+app = Flask(__name__)
 
-# 🎯 Целевое время
-TARGET_TIME = datetime(2025, 6, 10, 9, 0, 0, tzinfo=pytz.timezone('Europe/Moscow'))
+@app.route('/')
+def home():
+    return "Бот работает!"
 
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
-# Функция отсчёта
-def get_time_remaining():
-    now = datetime.now(pytz.timezone('Europe/Moscow'))
-    diff = TARGET_TIME - now
-    if diff.total_seconds() <= 0:
-        return None
-    total_seconds = int(diff.total_seconds())
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"До 10 июня 09:00 (МСК) осталось:\n" \
-           f"⏳ {hours:02}:{minutes:02}:{seconds:02}"
+threading.Thread(target=run_flask).start()
 
-# Команда /отсчет
+# Настройки Telegram
+api_id = 21018756
+api_hash = "5fce0349ea49d2c1717d197f8536d1b5"
+session_name = "countdown_session"  # .session файл должен быть в папке
+
+# Создание клиента
+client = TelegramClient(session_name, api_id, api_hash)
+
+# Цель — 10 июня 9:00 по МСК
+target_time = datetime.datetime(2025, 6, 10, 9, 0, 0, tzinfo=pytz.timezone('Europe/Moscow'))
+
 @client.on(events.NewMessage(pattern='/отсчет'))
-async def handler(event):
-    msg_text = get_time_remaining()
-    if not msg_text:
-        await event.reply("⏰ Время уже наступило!")
-        return
-    message = await event.respond(msg_text)
+async def countdown_handler(event):
+    msg = await event.respond("⏳ Считаем...")
+
     while True:
-        await asyncio.sleep(60)
-        msg_text = get_time_remaining()
-        if not msg_text:
-            await message.edit("⏰ Время наступило!")
+        now = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
+        diff = target_time - now
+
+        if diff.total_seconds() <= 0:
+            await msg.edit("✅ Время пришло!")
             break
+
+        days, remainder = divmod(int(diff.total_seconds()), 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, _ = divmod(remainder, 60)
+
+        countdown = f"⏳ До 10 июня 9:00 (МСК): {days}д {hours}ч {minutes}м"
         try:
-            await message.edit(msg_text)
-        except Exception as e:
-            print(f"Ошибка при обновлении сообщения: {e}")
-            break
+            await msg.edit(countdown)
+        except:
+            pass
 
-# Команда /люблюсоню
+        await asyncio.sleep(60)
+
 @client.on(events.NewMessage(pattern='/люблюсоню'))
-async def love_sonya(event):
-    await event.reply("мяУ МЯУ (meow gav gav )")
+async def love_handler(event):
+    await event.respond("❤️гав гав")
 
-# Запуск
-async def main():
-    print("🔑 Подключение к Telegram...")
-    await client.start(PHONE_NUMBER)
-    print("✅ Бот работает. Ждёт команды /отсчет или /люблюсоню")
-    await client.run_until_disconnected()
+# Запуск клиента
+print("🔑 Подключение к Telegram...")
+client.start()
+print("✅ Бот работает. Ждёт команду /отсчет или /люблюсоню")
 
-if __name__ == '__main__':
-    with client:
-        client.loop.run_until_complete(main())
+client.run_until_disconnected()
